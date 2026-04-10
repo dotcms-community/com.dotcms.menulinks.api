@@ -3,37 +3,39 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 
-    <parent>
-        <groupId>com.dotcms.core.plugins</groupId>
-        <artifactId>dotcms-core-plugins-parent</artifactId>
-        <version>${revision}${sha1}${changelist}</version>
-    </parent>
-
     <modelVersion>4.0.0</modelVersion>
+    <groupId>com.dotcms</groupId>
     <artifactId>com.dotcms.plugin.menu-link-api</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
     <packaging>bundle</packaging>
     <name>dotCMS Menu Link REST API Plugin</name>
     <description>OSGi plugin exposing full CRUD REST endpoints for dotCMS Menu Links</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <skip.rewrite>true</skip.rewrite>
+        <dotcms-core.version>26.04.06-01</dotcms-core.version>
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
         <maven.compiler.release>11</maven.compiler.release>
     </properties>
 
+    <repositories>
+        <repository>
+            <id>dotcms-repo</id>
+            <url>https://artifactory.dotcms.cloud/artifactory/libs-release</url>
+        </repository>
+    </repositories>
+
     <dependencies>
         <!--
             dotCMS core is provided at runtime by the OSGi container.
-            Run: ./mvnw install -pl :dotcms-core -DskipTests  before building this plugin.
-            OSGi framework classes (BundleContext, etc.) also come from the container — no
-            explicit osgi.core dependency is needed.
+            Bump dotcms-core.version to match your target dotCMS instance.
+            OSGi framework classes (BundleContext, etc.) also come from the container.
         -->
         <dependency>
             <groupId>com.dotcms</groupId>
             <artifactId>dotcms-core</artifactId>
-            <version>${project.version}</version>
+            <version>${dotcms-core.version}</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>

@@ -98,15 +98,22 @@ All endpoints wrap their payload in dotCMS's standard `ResponseEntityView`:
 
 ## Building
 
-```bash
-# 1. Build dotCMS core (needed as a provided compile-time dependency)
-./mvnw install -pl :dotcms-core -DskipTests
+The plugin is fully standalone — no dotCMS source checkout required. `dotcms-core` is downloaded automatically from the dotCMS Artifactory repository.
 
-# 2. Build the plugin JAR
-./mvnw install -pl :com.dotcms.plugin.menu-link-api -DskipTests
+```bash
+./mvnw package
 ```
 
 The output JAR is at `target/com.dotcms.plugin.menu-link-api-*.jar`.
+
+To target a different dotCMS version, change the `dotcms-core.version` property in `pom.xml`:
+
+```xml
+<dotcms-core.version>26.04.06-01</dotcms-core.version>
+```
+
+Release tags follow the pattern `YY.MM.DD-NN` and can be browsed at
+`https://artifactory.dotcms.cloud/artifactory/libs-release/com/dotcms/dotcms-core/`.
 
 ## Deployment
 
