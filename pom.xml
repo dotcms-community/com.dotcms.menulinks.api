@@ -54,11 +54,20 @@
                         <Bundle-DocURL>https://dotcms.com/</Bundle-DocURL>
                         <Bundle-Activator>com.dotcms.plugin.menulink.Activator</Bundle-Activator>
                         <!--
-                            Wildcard lets bnd scan compiled bytecode and derive the exact
-                            Import-Package list automatically — far safer than a hand-maintained
-                            list that silently misses packages until runtime.
+                            bnd scans compiled bytecode to derive Import-Package automatically.
+                            Third-party packages bundled inside dotCMS (Jackson, Swagger, javax.*)
+                            are exported at whatever version the running instance happens to have,
+                            which may differ from the version on our compile classpath. Override
+                            those with version=0 ("any version") to avoid runtime resolution
+                            failures. dotCMS's own packages are always exported at version 0
+                            so they need no special handling.
                         -->
-                        <Import-Package>*</Import-Package>
+                        <Import-Package>
+                            com.fasterxml.jackson.*;version=0,
+                            io.swagger.*;version=0,
+                            javax.*;version=0,
+                            *
+                        </Import-Package>
                         <Export-Package />
                     </instructions>
                 </configuration>
