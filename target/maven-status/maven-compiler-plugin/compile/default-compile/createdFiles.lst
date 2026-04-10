@@ -1,0 +1,4 @@
+com/dotcms/plugin/menulink/rest/MenuLinkForm.class
+com/dotcms/plugin/menulink/rest/MenuLinkView.class
+com/dotcms/plugin/menulink/rest/MenuLinkResource.class
+com/dotcms/plugin/menulink/Activator.class

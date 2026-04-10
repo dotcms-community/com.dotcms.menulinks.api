@@ -1,0 +1,30 @@
+Manifest-Version: 1.0
+Bnd-LastModified: 1775816819773
+Build-Jdk-Spec: 21
+Bundle-ActivationPolicy: lazy
+Bundle-Activator: com.dotcms.plugin.menulink.Activator
+Bundle-Description: OSGi plugin exposing full CRUD REST endpoints for do
+ tCMS Menu Links
+Bundle-License: https://www.gnu.org/licenses/gpl-3.0.en.html
+Bundle-ManifestVersion: 2
+Bundle-Name: dotCMS Menu Link REST API Plugin
+Bundle-SymbolicName: com.dotcms.plugin.menu-link-api
+Bundle-Version: 1.0.0.SNAPSHOT
+Created-By: Apache Maven Bundle Plugin 5.1.8
+Import-Package: org.osgi.framework;version=0,com.dotmarketing.business;v
+ ersion=0,com.dotmarketing.util;version=0,com.dotmarketing.beans;version
+ =0,com.dotmarketing.portlets.links.model;version=0,com.dotmarketing.por
+ tlets.links.business;version=0,com.dotmarketing.portlets.folders.model;
+ version=0,com.dotmarketing.portlets.folders.business;version=0,com.dotc
+ ms.rest;version=0,com.dotcms.rest.config;version=0,com.dotcms.rest.anno
+ tation;version=0,com.dotcms.rest.api.v1.authentication;version=0,com.li
+ feray.portal.model;version=0,javax.servlet.http;version=0,javax.ws.rs;v
+ ersion=0,javax.ws.rs.core;version=0,com.fasterxml.jackson.annotation;ve
+ rsion=0,io.swagger.v3.oas.annotations;version=0,io.swagger.v3.oas.annot
+ ations.media;version=0,io.swagger.v3.oas.annotations.parameters;version
+ =0,io.swagger.v3.oas.annotations.responses;version=0,io.swagger.v3.oas.
+ annotations.tags;version=0,com.dotmarketing.osgi;version=0,com.dotmarke
+ ting.exception;version=0,com.dotmarketing.factories;version=0,javax.ser
+ vlet;version=0
+Require-Capability: osgi.ee;filter:="(&(osgi.ee=JavaSE)(version=11))"
+Tool: Bnd-6.3.1.202206071316

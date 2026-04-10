@@ -2,8 +2,8 @@ package com.dotcms.plugin.menulink;
 
 import com.dotcms.plugin.menulink.rest.MenuLinkResource;
 import com.dotcms.rest.config.RestServiceUtil;
+import com.dotmarketing.osgi.GenericBundleActivator;
 import com.dotmarketing.util.Logger;
-import org.osgi.framework.BundleActivator;
 import org.osgi.framework.BundleContext;
 
 /**
@@ -12,7 +12,7 @@ import org.osgi.framework.BundleContext;
  * <p>Registers {@link MenuLinkResource} with dotCMS's Jersey container on start,
  * and removes it cleanly on stop so that hot-redeploy works correctly.
  */
-public class Activator implements BundleActivator {
+public class Activator extends GenericBundleActivator {
 
     @Override
     public void start(final BundleContext context) throws Exception {
