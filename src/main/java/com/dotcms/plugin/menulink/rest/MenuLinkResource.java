@@ -563,8 +563,7 @@ public class MenuLinkResource {
         if (UtilMethods.isSet(form.getTitle())) {
             link.setTitle(form.getTitle());
         }
-        link.setFriendlyName(UtilMethods.isSet(form.getFriendlyName())
-                ? form.getFriendlyName() : form.getTitle());
+        link.setFriendlyName(form.getFriendlyName() != null ? form.getFriendlyName() : "");
         link.setUrl(UtilMethods.isSet(form.getUrl())     ? form.getUrl()     : "");
         link.setProtocal(UtilMethods.isSet(form.getProtocol()) ? form.getProtocol() : "");
         link.setTarget(UtilMethods.isSet(form.getTarget()) ? form.getTarget() : "_self");
