@@ -1,7 +1,10 @@
 package com.dotcms.plugin.menulink.rest;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+
+
 
 /**
  * Request body for creating or updating a Menu Link.
@@ -14,6 +17,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * {@code CODE}.  Supply the matching companion field ({@code url}, {@code internalLinkIdentifier},
  * or {@code linkCode}) accordingly.
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class MenuLinkForm {
 
     private final String title;

@@ -119,13 +119,20 @@ public class MenuLinkResource {
                 resolvedHostId = site.getIdentifier();
             }
 
-            if (UtilMethods.isSet(folderPath) && UtilMethods.isSet(resolvedHostId)) {
+            if (UtilMethods.isSet(folderPath)) {
+                if (!UtilMethods.isSet(resolvedHostId)) {
+                    return Response.status(Response.Status.BAD_REQUEST)
+                            .entity(new ResponseEntityView<>("siteId is required when folderPath is specified"))
+                            .build();
+                }
                 final Host site = APILocator.getHostAPI().find(resolvedHostId, user, false);
                 final Folder folder = APILocator.getFolderAPI()
                         .findFolderByPath(folderPath, site, user, false);
-                if (folder != null && InodeUtils.isSet(folder.getInode())) {
-                    parentInode = folder.getInode();
+                if (folder == null || !InodeUtils.isSet(folder.getInode())) {
+                    // Explicit folder filter specified but not found — return empty rather than all links.
+                    return Response.ok(new ResponseEntityView<>(java.util.Collections.emptyList())).build();
                 }
+                parentInode = folder.getInode();
             }
 
             final List<Link> links = APILocator.getMenuLinkAPI().findLinks(
@@ -253,10 +260,15 @@ public class MenuLinkResource {
                         .build();
             }
 
+            validateLinkTypeFields(form);
+
             final Host site = resolveHost(form.getSiteId(), user);
             final Folder folder = resolveFolder(form.getFolderPath(), site, user);
 
             final Link link = buildLink(form);
+            // parent must be set before save so dotCMS creates the tree table entry
+            // that associates the link with its folder. Without it the UI folder view breaks.
+            link.setParent(folder.getInode());
             APILocator.getMenuLinkAPI().save(link, folder, user, false);
 
             if (form.isPublish()) {
@@ -322,6 +334,7 @@ public class MenuLinkResource {
             if (move) {
                 final Host site     = resolveHost(form.getSiteId(), user);
                 final Folder folder = resolveFolder(form.getFolderPath(), site, user);
+                existing.setParent(folder.getInode());
                 APILocator.getMenuLinkAPI().save(existing, folder, user, false);
             } else {
                 APILocator.getMenuLinkAPI().save(existing, user, false);
@@ -512,6 +525,27 @@ public class MenuLinkResource {
         final Link link = new Link();
         applyForm(form, link);
         return link;
+    }
+
+    /**
+     * Validates that the companion field required by each linkType is present.
+     */
+    private void validateLinkTypeFields(final MenuLinkForm form) {
+        final String type = UtilMethods.isSet(form.getLinkType())
+                ? form.getLinkType().toUpperCase()
+                : Link.LinkType.EXTERNAL.toString();
+
+        if (Link.LinkType.EXTERNAL.toString().equals(type) && !UtilMethods.isSet(form.getUrl())) {
+            throw new IllegalArgumentException("url is required for linkType EXTERNAL");
+        }
+        if (Link.LinkType.INTERNAL.toString().equals(type)
+                && !UtilMethods.isSet(form.getInternalLinkIdentifier())) {
+            throw new IllegalArgumentException(
+                    "internalLinkIdentifier is required for linkType INTERNAL");
+        }
+        if (Link.LinkType.CODE.toString().equals(type) && !UtilMethods.isSet(form.getLinkCode())) {
+            throw new IllegalArgumentException("linkCode is required for linkType CODE");
+        }
     }
 
     /**
