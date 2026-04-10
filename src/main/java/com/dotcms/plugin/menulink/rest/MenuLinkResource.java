@@ -484,7 +484,7 @@ public class MenuLinkResource {
                         .build();
             }
 
-            APILocator.getVersionableAPI().setWorking(link);
+            APILocator.getVersionableAPI().removeLive(link.getIdentifier());
 
             return Response.ok(new ResponseEntityView<>(MenuLinkView.from(link))).build();
 
@@ -526,11 +526,41 @@ public class MenuLinkResource {
     }
 
     /**
-     * Populates a new {@link Link} from a {@link MenuLinkForm}.
+     * Populates a new {@link Link} from a {@link MenuLinkForm}, applying create-time defaults
+     * for optional fields that were not supplied in the request.
      */
     private Link buildLink(final MenuLinkForm form) {
         final Link link = new Link();
         applyForm(form, link);
+        // Apply defaults for fields not provided in the POST body.
+        // applyForm skips null fields, so these only fire when the caller omitted them.
+        if (form.getTarget() == null) {
+            link.setTarget("_self");
+        }
+        if (form.getLinkType() == null) {
+            link.setLinkType(Link.LinkType.EXTERNAL.toString());
+        }
+        if (form.isShowOnMenu() == null) {
+            link.setShowOnMenu(false);
+        }
+        if (form.getSortOrder() == null) {
+            link.setSortOrder(0);
+        }
+        if (form.getUrl() == null) {
+            link.setUrl("");
+        }
+        if (form.getProtocol() == null) {
+            link.setProtocal("");
+        }
+        if (form.getLinkCode() == null) {
+            link.setLinkCode("");
+        }
+        if (form.getInternalLinkIdentifier() == null) {
+            link.setInternalLinkIdentifier("");
+        }
+        if (form.getFriendlyName() == null) {
+            link.setFriendlyName("");
+        }
         return link;
     }
 
@@ -557,23 +587,48 @@ public class MenuLinkResource {
 
     /**
      * Applies all editable {@link MenuLinkForm} fields onto an existing {@link Link}.
-     * Does not touch identifier, inode, or parent — those are managed by the API.
+     *
+     * <p>Fields that are {@code null} in the form are left unchanged on the link —
+     * this makes partial PUT requests safe. String fields set to {@code ""} are
+     * applied as-is (empty string is a valid intentional value).
+     *
+     * <p>Always stamps {@code modDate} with the current time; a null modDate causes
+     * the legacy DWR-based folder browser to crash with a JS exception.
+     *
+     * <p>Does not touch identifier, inode, or parent — those are managed by the API.
      */
     private void applyForm(final MenuLinkForm form, final Link link) {
-        if (UtilMethods.isSet(form.getTitle())) {
+        link.setModDate(new java.util.Date());
+
+        if (form.getTitle() != null) {
             link.setTitle(form.getTitle());
         }
-        link.setFriendlyName(form.getFriendlyName() != null ? form.getFriendlyName() : "");
-        link.setUrl(UtilMethods.isSet(form.getUrl())     ? form.getUrl()     : "");
-        link.setProtocal(UtilMethods.isSet(form.getProtocol()) ? form.getProtocol() : "");
-        link.setTarget(UtilMethods.isSet(form.getTarget()) ? form.getTarget() : "_self");
-        link.setLinkType(UtilMethods.isSet(form.getLinkType())
-                ? form.getLinkType() : Link.LinkType.EXTERNAL.toString());
-        link.setLinkCode(UtilMethods.isSet(form.getLinkCode()) ? form.getLinkCode() : "");
-        link.setInternalLinkIdentifier(
-                UtilMethods.isSet(form.getInternalLinkIdentifier())
-                        ? form.getInternalLinkIdentifier() : "");
-        link.setShowOnMenu(form.isShowOnMenu());
-        link.setSortOrder(form.getSortOrder());
+        if (form.getFriendlyName() != null) {
+            link.setFriendlyName(form.getFriendlyName());
+        }
+        if (form.getUrl() != null) {
+            link.setUrl(form.getUrl());
+        }
+        if (form.getProtocol() != null) {
+            link.setProtocal(form.getProtocol());
+        }
+        if (form.getTarget() != null) {
+            link.setTarget(form.getTarget());
+        }
+        if (form.getLinkType() != null) {
+            link.setLinkType(form.getLinkType());
+        }
+        if (form.getLinkCode() != null) {
+            link.setLinkCode(form.getLinkCode());
+        }
+        if (form.getInternalLinkIdentifier() != null) {
+            link.setInternalLinkIdentifier(form.getInternalLinkIdentifier());
+        }
+        if (form.isShowOnMenu() != null) {
+            link.setShowOnMenu(form.isShowOnMenu());
+        }
+        if (form.getSortOrder() != null) {
+            link.setSortOrder(form.getSortOrder());
+        }
     }
 }

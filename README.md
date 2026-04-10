@@ -158,9 +158,9 @@ A save creates or updates the *working* version of the link. It exists in the da
 
 Yes. Unlike contentlets, Menu Links do not maintain a separate working inode from the live inode. The factory's update path mutates the existing inode in place (`HibernateUtil.saveOrUpdate`). If the link is already live, the change is visible to live-site visitors as soon as the transaction commits. There is no staging buffer.
 
-**Does publish go through push publishing?**
+**Do publish/unpublish go through push publishing?**
 
-The `_publish` endpoint calls `VersionableAPI.setLive()` directly, which is what `MenuLinkAPIImpl` uses internally (e.g. in its `copy()` method). The UI's publish button goes through `PublishFactory.publishAsset()`, which may additionally trigger push-publishing hooks if you have remote endpoints configured. If push publishing matters in your environment, test accordingly or extend the `_publish` endpoint to call `PublishFactory` instead.
+The `_publish` endpoint calls `VersionableAPI.setLive()` directly and the `_unpublish` endpoint calls `VersionableAPI.removeLive()` directly. Both bypass the UI's `PublishFactory.publishAsset()` / `PublishFactory.unpublishAsset()` path, which additionally triggers push-publishing hooks if you have remote endpoints configured. If push publishing matters in your environment, test accordingly or extend those endpoints to call `PublishFactory` instead.
 
 **What is the `protocol` field for?**
 

@@ -30,8 +30,8 @@ public class MenuLinkForm {
     private final String linkType;
     private final String linkCode;
     private final String internalLinkIdentifier;
-    private final boolean showOnMenu;
-    private final int sortOrder;
+    private final Boolean showOnMenu;
+    private final Integer sortOrder;
     /** Host identifier (UUID) or hostname. Required for create; optional for update (move). */
     private final String siteId;
     /** Folder path on the site, e.g. {@code "/"} or {@code "/about"}. Required for create. */
@@ -49,8 +49,8 @@ public class MenuLinkForm {
             @JsonProperty("linkType")                 final String linkType,
             @JsonProperty("linkCode")                 final String linkCode,
             @JsonProperty("internalLinkIdentifier")   final String internalLinkIdentifier,
-            @JsonProperty("showOnMenu")               final boolean showOnMenu,
-            @JsonProperty("sortOrder")                final int sortOrder,
+            @JsonProperty("showOnMenu")               final Boolean showOnMenu,
+            @JsonProperty("sortOrder")                final Integer sortOrder,
             @JsonProperty("siteId")                   final String siteId,
             @JsonProperty("folderPath")               final String folderPath,
             @JsonProperty("publish")                  final boolean publish) {
@@ -78,8 +78,8 @@ public class MenuLinkForm {
     public String getLinkType()              { return linkType; }
     public String getLinkCode()              { return linkCode; }
     public String getInternalLinkIdentifier(){ return internalLinkIdentifier; }
-    public boolean isShowOnMenu()            { return showOnMenu; }
-    public int getSortOrder()                { return sortOrder; }
+    public Boolean isShowOnMenu()            { return showOnMenu; }
+    public Integer getSortOrder()            { return sortOrder; }
     public String getSiteId()                { return siteId; }
     public String getFolderPath()            { return folderPath; }
     public boolean isPublish()               { return publish; }
