@@ -96,7 +96,7 @@ public class MenuLinkResource {
             @Context final HttpServletResponse response,
             @Parameter(description = "Host identifier (UUID) or hostname to filter by")
             @QueryParam("siteId") final String siteId,
-            @Parameter(description = "Parent folder path to filter by (e.g. /about)")
+            @Parameter(description = "Parent folder path to filter by (e.g. /about)", allowReserved = true)
             @QueryParam("folderPath") final String folderPath,
             @Parameter(description = "Include archived links")
             @QueryParam("includeArchived") @DefaultValue("false") final boolean includeArchived,
