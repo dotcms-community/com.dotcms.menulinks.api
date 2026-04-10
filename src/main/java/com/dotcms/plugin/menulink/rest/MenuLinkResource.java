@@ -7,6 +7,7 @@ import com.dotcms.rest.annotation.NoCache;
 import com.dotcms.rest.api.v1.authentication.ResponseUtil;
 import com.dotmarketing.beans.Host;
 import com.dotmarketing.business.APILocator;
+import com.dotmarketing.business.PermissionAPI;
 import com.dotmarketing.portlets.folders.model.Folder;
 import com.dotmarketing.portlets.links.model.Link;
 import com.dotmarketing.util.InodeUtils;
@@ -112,13 +113,13 @@ public class MenuLinkResource {
 
         try {
             String resolvedHostId = null;
-            String parentInode    = null;
 
             if (UtilMethods.isSet(siteId)) {
                 final Host site = resolveHost(siteId, user);
                 resolvedHostId = site.getIdentifier();
             }
 
+            final List<Link> links;
             if (UtilMethods.isSet(folderPath)) {
                 if (!UtilMethods.isSet(resolvedHostId)) {
                     return Response.status(Response.Status.BAD_REQUEST)
@@ -129,23 +130,29 @@ public class MenuLinkResource {
                 final Folder folder = APILocator.getFolderAPI()
                         .findFolderByPath(folderPath, site, user, false);
                 if (folder == null || !InodeUtils.isSet(folder.getInode())) {
-                    // Explicit folder filter specified but not found — return empty rather than all links.
                     return Response.ok(new ResponseEntityView<>(java.util.Collections.emptyList())).build();
                 }
-                parentInode = folder.getInode();
+                // findLinks() filters by tree.parent which is not reliably populated for links —
+                // dotCMS tracks folder membership via identifier.parent_path instead.
+                // findFolderMenuLinks() uses FolderAPI.getWorkingLinks(), the same path NavTool
+                // uses, so it is correct. Re-apply permission filtering since that method runs
+                // as system user internally.
+                final List<Link> folderLinks = APILocator.getMenuLinkAPI().findFolderMenuLinks(folder);
+                links = APILocator.getPermissionAPI()
+                        .filterCollection(folderLinks, PermissionAPI.PERMISSION_READ, false, user);
+            } else {
+                links = APILocator.getMenuLinkAPI().findLinks(
+                        user,
+                        includeArchived,
+                        null,
+                        resolvedHostId,
+                        null,
+                        null,
+                        null,
+                        offset,
+                        limit,
+                        orderBy);
             }
-
-            final List<Link> links = APILocator.getMenuLinkAPI().findLinks(
-                    user,
-                    includeArchived,
-                    null,            // no extra params map
-                    resolvedHostId,
-                    null,            // inode filter
-                    null,            // identifier filter
-                    parentInode,
-                    offset,
-                    limit,
-                    orderBy);
 
             final List<MenuLinkView> views = links.stream()
                     .map(link -> {
