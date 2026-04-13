@@ -58,7 +58,7 @@ import java.util.stream.Collectors;
  * </ul>
  */
 @Path("/v1/menulinks")
-@Tag(name = "Menu Links", description = "CRUD operations for dotCMS Menu Link assets")
+@Tag(name = "Menu Links", description = "CRUD operations for dotCMS Menu Link entities")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class MenuLinkResource {
@@ -138,8 +138,29 @@ public class MenuLinkResource {
                 // uses, so it is correct. Re-apply permission filtering since that method runs
                 // as system user internally.
                 final List<Link> folderLinks = APILocator.getMenuLinkAPI().findFolderMenuLinks(folder);
-                links = APILocator.getPermissionAPI()
+                List<Link> permitted = APILocator.getPermissionAPI()
                         .filterCollection(folderLinks, PermissionAPI.PERMISSION_READ, false, user);
+
+                if (!includeArchived) {
+                    permitted = permitted.stream()
+                            .filter(l -> {
+                                try {
+                                    return !l.isArchived();
+                                } catch (Exception e) {
+                                    Logger.warn(this, "Could not check archived state for link inode=" + l.getInode() + ": " + e.getMessage());
+                                    return true;
+                                }
+                            })
+                            .collect(Collectors.toList());
+                }
+
+                permitted = sortLinks(permitted, orderBy);
+
+                final int fromIndex = Math.min(offset, permitted.size());
+                final int toIndex = limit > 0
+                        ? Math.min(fromIndex + limit, permitted.size())
+                        : permitted.size();
+                links = permitted.subList(fromIndex, toIndex);
             } else {
                 links = APILocator.getMenuLinkAPI().findLinks(
                         user,
@@ -523,6 +544,48 @@ public class MenuLinkResource {
                     "Folder not found: " + folderPath + " on site " + site.getHostname());
         }
         return folder;
+    }
+
+    /**
+     * Sorts a list of links by the given field name (case-insensitive). Falls back to title order
+     * for unrecognised field names. String comparisons are case-insensitive.
+     */
+    private List<Link> sortLinks(final List<Link> links, final String orderBy) {
+        if (!UtilMethods.isSet(orderBy)) {
+            return links;
+        }
+        final java.util.Comparator<Link> comparator;
+        switch (orderBy.trim().toLowerCase()) {
+            case "friendlyname":
+                comparator = java.util.Comparator.comparing(
+                        (Link l) -> UtilMethods.isSet(l.getFriendlyName()) ? l.getFriendlyName().toLowerCase() : "");
+                break;
+            case "url":
+                comparator = java.util.Comparator.comparing(
+                        (Link l) -> UtilMethods.isSet(l.getUrl()) ? l.getUrl().toLowerCase() : "");
+                break;
+            case "target":
+                comparator = java.util.Comparator.comparing(
+                        (Link l) -> UtilMethods.isSet(l.getTarget()) ? l.getTarget().toLowerCase() : "");
+                break;
+            case "linktype":
+                comparator = java.util.Comparator.comparing(
+                        (Link l) -> UtilMethods.isSet(l.getLinkType()) ? l.getLinkType().toLowerCase() : "");
+                break;
+            case "linkcode":
+                comparator = java.util.Comparator.comparing(
+                        (Link l) -> UtilMethods.isSet(l.getLinkCode()) ? l.getLinkCode().toLowerCase() : "");
+                break;
+            case "sortorder":
+                comparator = java.util.Comparator.comparingInt(Link::getSortOrder);
+                break;
+            case "title":
+            default:
+                comparator = java.util.Comparator.comparing(
+                        (Link l) -> UtilMethods.isSet(l.getTitle()) ? l.getTitle().toLowerCase() : "");
+                break;
+        }
+        return links.stream().sorted(comparator).collect(Collectors.toList());
     }
 
     /**

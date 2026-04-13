@@ -4,7 +4,9 @@ An OSGi plugin that adds full CRUD REST API support for dotCMS Menu Links — th
 
 ## Background
 
-In dotCMS, most content is managed through the Workflow/Content API. Menu Links are a legacy exception: they are stored as a separate `WebAsset` type (not a content type), have their own database table (`links`), and are only manageable through the legacy Struts UI portlet. This plugin surfaces the existing internal `MenuLinkAPI` over HTTP so that Menu Links can be created, updated, published, and deleted programmatically.
+In dotCMS, most content is managed through the Workflow/Content API. Menu Links are a legacy exception: they are stored as a separate `WebAsset` type (not a content type), have their own database table (`links`), and are only manageable through the UI. This plugin surfaces the existing internal `MenuLinkAPI` over HTTP so that Menu Links can be created, updated, published, and deleted programmatically.
+
+All endpoints surface with full interactivity and documentation in the API Playground under **Menu Links**.
 
 ## Endpoints
 
@@ -144,7 +146,7 @@ No. Every endpoint authenticates via `WebResource.init()` (the same mechanism us
 
 **Does this write to the database in a new or untested way?**
 
-No. The call chain is `MenuLinkResource → MenuLinkAPIImpl → MenuLinkFactoryImpl → HibernateUtil/DotConnect` — identical to the chain the legacy Struts UI uses. The plugin adds only an HTTP layer on top of the existing internal API. The same transaction wrapper (`@WrapInTransaction`), the same cache invalidation (`NavToolCache`, `RefreshMenus`), and the same Hibernate calls are used regardless of whether the request originated from the UI or this API.
+No. The call chain is `MenuLinkResource → MenuLinkAPIImpl → MenuLinkFactoryImpl → HibernateUtil/DotConnect` — identical to the chain the UI uses. The plugin adds only an HTTP layer on top of the existing internal API. The same transaction wrapper (`@WrapInTransaction`), the same cache invalidation (`NavToolCache`, `RefreshMenus`), and the same Hibernate calls are used regardless of whether the request originated from the UI or this API.
 
 **Why aren't Menu Links a content type? Can I use the Workflow API instead?**
 
