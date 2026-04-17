@@ -103,10 +103,23 @@ public class MenuLinkResource {
             @QueryParam("includeArchived") @DefaultValue("false") final boolean includeArchived,
             @Parameter(description = "Zero-based offset for pagination")
             @QueryParam("offset") @DefaultValue("0") final int offset,
-            @Parameter(description = "Maximum number of results (0 = no limit)")
+            @Parameter(description = "Maximum number of results. Defaults to 50. Pass 0 to return all results.")
             @QueryParam("limit") @DefaultValue("50") final int limit,
-            @Parameter(description = "Sort field")
-            @QueryParam("orderBy") @DefaultValue("title") final String orderBy) {
+            @Parameter(description = "Field(s) to sort by. Accepts a single value or a comma-separated list "
+                    + "for multi-level sorting (e.g. 'path,title' or 'path,sort_order'). "
+                    + "Accepted values (case- and underscore-insensitive): "
+                    + "title (default), friendly_name, url, target, link_type, link_code, sort_order, "
+                    + "mod_date, mod_user, show_on_menu, path. "
+                    + "Note: when folderPath is specified, sorting is done in-memory and all values apply; "
+                    + "otherwise the first value is passed directly to the database as a column name "
+                    + "and additional comma-separated values are ignored. "
+                    + "The 'path' token (folder path) is only meaningful when folderPath is specified with depth > 0.")
+            @QueryParam("orderBy") @DefaultValue("title") final String orderBy,
+            @Parameter(description = "Folder traversal depth when folderPath is specified. "
+                    + "0 = only the specified folder (default), 1 = include direct child folders, "
+                    + "2 = grandchildren, and so on. "
+                    + "Note: larger depths may be computationally expensive on trees with many nested subfolders.")
+            @QueryParam("depth") @DefaultValue("0") final int depth) {
 
         final InitDataObject auth = webResource.init(request, response, true);
         final User user = auth.getUser();
@@ -137,7 +150,7 @@ public class MenuLinkResource {
                 // findFolderMenuLinks() uses FolderAPI.getWorkingLinks(), the same path NavTool
                 // uses, so it is correct. Re-apply permission filtering since that method runs
                 // as system user internally.
-                final List<Link> folderLinks = APILocator.getMenuLinkAPI().findFolderMenuLinks(folder);
+                final List<Link> folderLinks = collectLinksToDepth(folder, Math.max(0, depth), user);
                 List<Link> permitted = APILocator.getPermissionAPI()
                         .filterCollection(folderLinks, PermissionAPI.PERMISSION_READ, false, user);
 
@@ -171,7 +184,7 @@ public class MenuLinkResource {
                         null,
                         null,
                         offset,
-                        limit,
+                        limit == 0 ? Integer.MAX_VALUE : limit,
                         orderBy);
             }
 
@@ -547,45 +560,93 @@ public class MenuLinkResource {
     }
 
     /**
-     * Sorts a list of links by the given field name (case-insensitive). Falls back to title order
-     * for unrecognised field names. String comparisons are case-insensitive.
+     * Collects all menu links in {@code folder} and, if {@code depth > 0}, recursively in each
+     * direct sub-folder (decrementing depth on each level). Runs as the system user internally
+     * (via {@code findFolderMenuLinks}); callers are expected to apply permission filtering on the
+     * returned list.
+     */
+    private List<Link> collectLinksToDepth(final Folder folder, final int depth, final User user)
+            throws Exception {
+        final List<Link> result = new java.util.ArrayList<>(
+                APILocator.getMenuLinkAPI().findFolderMenuLinks(folder));
+        if (depth > 0) {
+            final List<Folder> subFolders =
+                    APILocator.getFolderAPI().findSubFolders(folder, user, false);
+            for (final Folder sub : subFolders) {
+                result.addAll(collectLinksToDepth(sub, depth - 1, user));
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Sorts a list of links by one or more comma-separated field names. Each token is passed to
+     * {@link #buildComparator} and chained via {@code thenComparing}. Falls back to title for
+     * unrecognised tokens.
      */
     private List<Link> sortLinks(final List<Link> links, final String orderBy) {
         if (!UtilMethods.isSet(orderBy)) {
             return links;
         }
-        final java.util.Comparator<Link> comparator;
-        switch (orderBy.trim().toLowerCase()) {
-            case "friendlyname":
-                comparator = java.util.Comparator.comparing(
-                        (Link l) -> UtilMethods.isSet(l.getFriendlyName()) ? l.getFriendlyName().toLowerCase() : "");
-                break;
-            case "url":
-                comparator = java.util.Comparator.comparing(
-                        (Link l) -> UtilMethods.isSet(l.getUrl()) ? l.getUrl().toLowerCase() : "");
-                break;
-            case "target":
-                comparator = java.util.Comparator.comparing(
-                        (Link l) -> UtilMethods.isSet(l.getTarget()) ? l.getTarget().toLowerCase() : "");
-                break;
-            case "linktype":
-                comparator = java.util.Comparator.comparing(
-                        (Link l) -> UtilMethods.isSet(l.getLinkType()) ? l.getLinkType().toLowerCase() : "");
-                break;
-            case "linkcode":
-                comparator = java.util.Comparator.comparing(
-                        (Link l) -> UtilMethods.isSet(l.getLinkCode()) ? l.getLinkCode().toLowerCase() : "");
-                break;
-            case "sortorder":
-                comparator = java.util.Comparator.comparingInt(Link::getSortOrder);
-                break;
-            case "title":
-            default:
-                comparator = java.util.Comparator.comparing(
-                        (Link l) -> UtilMethods.isSet(l.getTitle()) ? l.getTitle().toLowerCase() : "");
-                break;
+        final String[] fields = orderBy.split(",");
+        java.util.Comparator<Link> comparator = buildComparator(fields[0].trim());
+        for (int i = 1; i < fields.length; i++) {
+            comparator = comparator.thenComparing(buildComparator(fields[i].trim()));
         }
         return links.stream().sorted(comparator).collect(Collectors.toList());
+    }
+
+    /**
+     * Returns a {@link java.util.Comparator} for a single sort field token. The token is
+     * normalised to lowercase with underscores stripped before matching, so {@code sort_order},
+     * {@code sortOrder}, and {@code sortorder} are all equivalent. Falls back to title for
+     * unrecognised tokens. String comparisons are case-insensitive.
+     */
+    private java.util.Comparator<Link> buildComparator(final String field) {
+        switch (field.trim().toLowerCase().replace("_", "")) {
+            case "friendlyname":
+                return java.util.Comparator.comparing(
+                        (Link l) -> UtilMethods.isSet(l.getFriendlyName()) ? l.getFriendlyName().toLowerCase() : "");
+            case "url":
+                return java.util.Comparator.comparing(
+                        (Link l) -> UtilMethods.isSet(l.getUrl()) ? l.getUrl().toLowerCase() : "");
+            case "target":
+                return java.util.Comparator.comparing(
+                        (Link l) -> UtilMethods.isSet(l.getTarget()) ? l.getTarget().toLowerCase() : "");
+            case "linktype":
+                return java.util.Comparator.comparing(
+                        (Link l) -> UtilMethods.isSet(l.getLinkType()) ? l.getLinkType().toLowerCase() : "");
+            case "linkcode":
+                return java.util.Comparator.comparing(
+                        (Link l) -> UtilMethods.isSet(l.getLinkCode()) ? l.getLinkCode().toLowerCase() : "");
+            case "sortorder":
+                return java.util.Comparator.comparingInt(Link::getSortOrder);
+            case "moddate":
+                return java.util.Comparator.comparing(
+                        (Link l) -> l.getModDate() != null ? l.getModDate() : new java.util.Date(0));
+            case "moduser":
+                return java.util.Comparator.comparing(
+                        (Link l) -> UtilMethods.isSet(l.getModUser()) ? l.getModUser().toLowerCase() : "");
+            case "showonmenu":
+                // false < true — links shown on menu sort last
+                return java.util.Comparator.comparing(Link::isShowOnMenu);
+            case "path":
+                return java.util.Comparator.comparing((Link l) -> {
+                    try {
+                        final String p = APILocator.getIdentifierAPI()
+                                .find(l.getIdentifier()).getParentPath();
+                        return p != null ? p : "";
+                    } catch (Exception e) {
+                        Logger.warn(this, "Could not resolve path for link "
+                                + l.getIdentifier() + ": " + e.getMessage());
+                        return "";
+                    }
+                });
+            case "title":
+            default:
+                return java.util.Comparator.comparing(
+                        (Link l) -> UtilMethods.isSet(l.getTitle()) ? l.getTitle().toLowerCase() : "");
+        }
     }
 
     /**

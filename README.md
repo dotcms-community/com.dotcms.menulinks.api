@@ -30,8 +30,37 @@ Base path: `/api/v1/menulinks`
 | `folderPath` | string | — | Parent folder path, e.g. `/about` |
 | `includeArchived` | boolean | `false` | Include archived links |
 | `offset` | int | `0` | Pagination offset |
-| `limit` | int | `50` | Page size |
-| `orderBy` | string | `title` | Sort field |
+| `limit` | int | `50` | Page size. Pass `0` to return all results. |
+| `orderBy` | string | `title` | Sort field(s) — see valid values below |
+| `depth` | int | `0` | Folder traversal depth when `folderPath` is set. `0` = the specified folder only, `1` = include direct child folders, `2` = grandchildren, etc. Large values may be expensive on deep trees. |
+
+#### Valid `orderBy` values
+
+Pass a single value or a **comma-separated list** for multi-level sorting:
+
+```
+?orderBy=path,title
+?orderBy=path,sort_order
+?orderBy=mod_date
+```
+
+Case and underscores are ignored, so `sort_order`, `sortOrder`, and `sortorder` are all equivalent.
+
+| Value | Sorts by | Notes |
+|-------|----------|-------|
+| `title` *(default)* | Link title | |
+| `friendly_name` | Friendly name | |
+| `url` | Target URL | |
+| `target` | Link target (`_self`, `_blank`, etc.) | |
+| `link_type` | Link type (`EXTERNAL`, `INTERNAL`, `CODE`) | |
+| `link_code` | Embedded code (for `CODE` links) | |
+| `sort_order` | Integer sort position within the folder | |
+| `mod_date` | Last modified date | |
+| `mod_user` | User who last modified | |
+| `show_on_menu` | Whether the link appears in navigation | |
+| `path` | Parent folder path | In-memory only; only meaningful with `folderPath` + `depth > 0`. Sorts alphabetically, so `/a/` groups before `/a/x/` before `/b/`. |
+
+> **Note:** when `folderPath` is specified, sorting is applied in-memory after fetching and all comma-separated tokens apply. Otherwise, only the first token is used and is passed directly to the database as a column name — invalid values are silently ignored by dotCMS, which falls back to `mod_date desc`.
 
 ### Request body — `POST` / `PUT`
 
