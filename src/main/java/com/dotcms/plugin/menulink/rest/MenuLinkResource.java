@@ -106,14 +106,15 @@ public class MenuLinkResource {
             @Parameter(description = "Maximum number of results. Defaults to 50. Pass 0 to return all results.")
             @QueryParam("limit") @DefaultValue("50") final int limit,
             @Parameter(description = "Field(s) to sort by. Accepts a single value or a comma-separated list "
-                    + "for multi-level sorting (e.g. 'path,title' or 'path,sort_order'). "
+                    + "for multi-level sorting, e.g. `path,title` or `path,sort_order`. "
                     + "Accepted values (case- and underscore-insensitive): "
-                    + "title (default), friendly_name, url, target, link_type, link_code, sort_order, "
-                    + "mod_date, mod_user, show_on_menu, path. "
-                    + "Note: when folderPath is specified, sorting is done in-memory and all values apply; "
-                    + "otherwise the first value is passed directly to the database as a column name "
-                    + "and additional comma-separated values are ignored. "
-                    + "The 'path' token (folder path) is only meaningful when folderPath is specified with depth > 0.")
+                    + "`title` (default), `friendly_name`, `url`, `target`, `link_type`, `link_code`, "
+                    + "`sort_order`, `mod_date`, `mod_user`, `show_on_menu`, `path`. "
+                    + "`path` sorts by each link's parent folder path; it is only meaningful when "
+                    + "`depth` > 0 causes links from multiple folders to appear in the same result set. "
+                    + "When the separate `folderPath` parameter is specified, sorting is applied in-memory and all comma-separated "
+                    + "tokens take effect. Otherwise only the first token is passed directly to the database "
+                    + "as a column name; additional tokens are ignored.")
             @QueryParam("orderBy") @DefaultValue("title") final String orderBy,
             @Parameter(description = "Folder traversal depth when folderPath is specified. "
                     + "0 = only the specified folder (default), 1 = include direct child folders, "
