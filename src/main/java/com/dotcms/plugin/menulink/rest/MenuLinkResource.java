@@ -7,7 +7,6 @@ import com.dotcms.rest.annotation.NoCache;
 import com.dotcms.rest.api.v1.authentication.ResponseUtil;
 import com.dotmarketing.beans.Host;
 import com.dotmarketing.business.APILocator;
-import com.dotmarketing.business.PermissionAPI;
 import com.dotmarketing.common.db.DotConnect;
 import com.dotmarketing.db.HibernateUtil;
 import com.dotmarketing.portlets.folders.model.Folder;
@@ -124,14 +123,16 @@ public class MenuLinkResource {
                     + "Note: larger depths may be computationally expensive on trees with many nested subfolders.")
             @QueryParam("depth") @DefaultValue("0") final int depth) {
 
-        final InitDataObject auth = webResource.init(request, response, true);
-        final User user = auth.getUser();
+        // Authentication is enforced here; data access uses systemUser to mirror NavTool
+        // (navigation is public-facing content — per-link permission checks are intentionally skipped).
+        webResource.init(request, response, true);
+        final User systemUser = APILocator.systemUser();
 
         try {
             String resolvedHostId = null;
 
             if (UtilMethods.isSet(siteId)) {
-                final Host site = resolveHost(siteId, user);
+                final Host site = resolveHost(siteId, systemUser, false);
                 resolvedHostId = site.getIdentifier();
             }
 
@@ -146,26 +147,21 @@ public class MenuLinkResource {
                             .entity(new ResponseEntityView<>("siteId is required when folderPath is specified"))
                             .build();
                 }
-                final Host site = APILocator.getHostAPI().find(resolvedHostId, user, false);
+                final Host site = APILocator.getHostAPI().find(resolvedHostId, systemUser, false);
                 final Folder folder = APILocator.getFolderAPI()
-                        .findFolderByPath(folderPath, site, user, false);
+                        .findFolderByPath(folderPath, site, systemUser, false);
                 if (folder == null || !InodeUtils.isSet(folder.getInode())) {
                     return Response.ok(new ResponseEntityView<>(java.util.Collections.emptyList())).build();
                 }
                 // Uses a two-query SQL approach (one DotConnect pass to resolve inodes,
                 // one Hibernate batch load) instead of one findFolderMenuLinks() +
-                // one findSubFolders() call per folder. Re-apply permission filtering
-                // since the SQL runs without user context.
+                // one findSubFolders() call per folder.
                 long _t = System.currentTimeMillis();
                 final List<Link> folderLinks = findLinksUnderPath(folderPath, site, Math.max(0, depth), versionData);
                 Logger.info(this, String.format("[menulinks] findLinksUnderPath: %dms (%d links)",
                         System.currentTimeMillis() - _t, folderLinks.size()));
 
-                _t = System.currentTimeMillis();
-                List<Link> permitted = APILocator.getPermissionAPI()
-                        .filterCollection(folderLinks, PermissionAPI.PERMISSION_READ, false, user);
-                Logger.info(this, String.format("[menulinks] permission filter: %dms (%d permitted)",
-                        System.currentTimeMillis() - _t, permitted.size()));
+                List<Link> permitted = folderLinks;
 
                 _t = System.currentTimeMillis();
                 if (!includeArchived) {
@@ -194,7 +190,7 @@ public class MenuLinkResource {
                 links = permitted.subList(fromIndex, toIndex);
             } else {
                 links = APILocator.getMenuLinkAPI().findLinks(
-                        user,
+                        systemUser,
                         includeArchived,
                         null,
                         resolvedHostId,
@@ -258,12 +254,12 @@ public class MenuLinkResource {
             @Parameter(description = "Menu link identifier (UUID)", required = true)
             @PathParam("identifier") final String identifier) {
 
-        final InitDataObject auth = webResource.init(request, response, true);
-        final User user = auth.getUser();
+        webResource.init(request, response, true);
+        final User systemUser = APILocator.systemUser();
 
         try {
             final Link link = APILocator.getMenuLinkAPI()
-                    .findWorkingLinkById(identifier, user, false);
+                    .findWorkingLinkById(identifier, systemUser, false);
 
             if (link == null || !InodeUtils.isSet(link.getInode())) {
                 return Response.status(Response.Status.NOT_FOUND)
@@ -327,7 +323,7 @@ public class MenuLinkResource {
 
             validateLinkTypeFields(form);
 
-            final Host site = resolveHost(form.getSiteId(), user);
+            final Host site = resolveHost(form.getSiteId(), user, false);
             final Folder folder = resolveFolder(form.getFolderPath(), site, user);
 
             final Link link = buildLink(form);
@@ -397,7 +393,7 @@ public class MenuLinkResource {
                     && UtilMethods.isSet(form.getFolderPath());
 
             if (move) {
-                final Host site     = resolveHost(form.getSiteId(), user);
+                final Host site     = resolveHost(form.getSiteId(), user, false);
                 final Folder folder = resolveFolder(form.getFolderPath(), site, user);
                 existing.setParent(folder.getInode());
                 APILocator.getMenuLinkAPI().save(existing, folder, user, false);
@@ -558,11 +554,16 @@ public class MenuLinkResource {
 
     /**
      * Resolves a host by UUID identifier first, falling back to hostname lookup.
+     *
+     * @param respectFrontEndRoles pass {@code true} for read endpoints so that front-end
+     *                             users can access sites they have front-end permission on;
+     *                             pass {@code false} for write endpoints.
      */
-    private Host resolveHost(final String siteId, final User user) throws Exception {
-        Host site = APILocator.getHostAPI().find(siteId, user, false);
+    private Host resolveHost(final String siteId, final User user,
+                              final boolean respectFrontEndRoles) throws Exception {
+        Host site = APILocator.getHostAPI().find(siteId, user, respectFrontEndRoles);
         if (site == null || !UtilMethods.isSet(site.getIdentifier())) {
-            site = APILocator.getHostAPI().findByName(siteId, user, false);
+            site = APILocator.getHostAPI().findByName(siteId, user, respectFrontEndRoles);
         }
         if (site == null || !UtilMethods.isSet(site.getIdentifier())) {
             throw new IllegalArgumentException("Site not found: " + siteId);
