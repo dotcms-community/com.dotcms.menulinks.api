@@ -8,6 +8,8 @@ import com.dotcms.rest.api.v1.authentication.ResponseUtil;
 import com.dotmarketing.beans.Host;
 import com.dotmarketing.business.APILocator;
 import com.dotmarketing.business.PermissionAPI;
+import com.dotmarketing.db.DotConnect;
+import com.dotmarketing.db.HibernateUtil;
 import com.dotmarketing.portlets.folders.model.Folder;
 import com.dotmarketing.portlets.links.model.Link;
 import com.dotmarketing.util.InodeUtils;
@@ -146,12 +148,11 @@ public class MenuLinkResource {
                 if (folder == null || !InodeUtils.isSet(folder.getInode())) {
                     return Response.ok(new ResponseEntityView<>(java.util.Collections.emptyList())).build();
                 }
-                // findLinks() filters by tree.parent which is not reliably populated for links —
-                // dotCMS tracks folder membership via identifier.parent_path instead.
-                // findFolderMenuLinks() uses FolderAPI.getWorkingLinks(), the same path NavTool
-                // uses, so it is correct. Re-apply permission filtering since that method runs
-                // as system user internally.
-                final List<Link> folderLinks = collectLinksToDepth(folder, Math.max(0, depth), user);
+                // Uses a two-query SQL approach (one DotConnect pass to resolve inodes,
+                // one Hibernate batch load) instead of one findFolderMenuLinks() +
+                // one findSubFolders() call per folder. Re-apply permission filtering
+                // since the SQL runs without user context.
+                final List<Link> folderLinks = findLinksUnderPath(folderPath, site, Math.max(0, depth));
                 List<Link> permitted = APILocator.getPermissionAPI()
                         .filterCollection(folderLinks, PermissionAPI.PERMISSION_READ, false, user);
 
@@ -561,23 +562,59 @@ public class MenuLinkResource {
     }
 
     /**
-     * Collects all menu links in {@code folder} and, if {@code depth > 0}, recursively in each
-     * direct sub-folder (decrementing depth on each level). Runs as the system user internally
-     * (via {@code findFolderMenuLinks}); callers are expected to apply permission filtering on the
-     * returned list.
+     * Fetches all working menu links whose {@code identifier.parent_path} falls within
+     * {@code maxDepth} levels below {@code rootPath} on the given site, using two SQL
+     * round-trips regardless of how many folders are involved:
+     *
+     * <ol>
+     *   <li>A {@link DotConnect} query resolves working link inodes from
+     *       {@code link_version_info} joined to {@code identifier}, filtered by
+     *       {@code host_inode} and a {@code parent_path LIKE} prefix. Depth is enforced
+     *       in Java by counting path separators.</li>
+     *   <li>A single Hibernate {@code IN} query batch-loads the {@link Link} objects.</li>
+     * </ol>
+     *
+     * <p>Callers are expected to apply permission filtering on the returned list.
      */
-    private List<Link> collectLinksToDepth(final Folder folder, final int depth, final User user)
-            throws Exception {
-        final List<Link> result = new java.util.ArrayList<>(
-                APILocator.getMenuLinkAPI().findFolderMenuLinks(folder));
-        if (depth > 0) {
-            final List<Folder> subFolders =
-                    APILocator.getFolderAPI().findSubFolders(folder, user, false);
-            for (final Folder sub : subFolders) {
-                result.addAll(collectLinksToDepth(sub, depth - 1, user));
-            }
+    private List<Link> findLinksUnderPath(final String rootPath, final Host site,
+                                           final int maxDepth) throws Exception {
+        final String normalizedPath = rootPath.endsWith("/") ? rootPath : rootPath + "/";
+        final long baseSlashes = normalizedPath.chars().filter(c -> c == '/').count();
+
+        final DotConnect dc = new DotConnect();
+        dc.setSQL("SELECT vinfo.working_inode, id.parent_path "
+                + "FROM link_version_info vinfo "
+                + "JOIN identifier id ON id.id = vinfo.identifier "
+                + "WHERE id.host_inode = ? "
+                + "AND id.parent_path LIKE ?");
+        dc.addParam(site.getIdentifier());
+        dc.addParam(normalizedPath + "%");
+
+        final List<String> inodes = dc.loadResults().stream()
+                .filter(row -> {
+                    final Object p = row.get("parent_path");
+                    if (p == null) return false;
+                    return p.toString().chars().filter(c -> c == '/').count()
+                            <= baseSlashes + maxDepth;
+                })
+                .map(row -> {
+                    final Object v = row.get("working_inode");
+                    return v != null ? v.toString() : null;
+                })
+                .filter(inode -> inode != null)
+                .collect(Collectors.toList());
+
+        if (inodes.isEmpty()) {
+            return java.util.Collections.emptyList();
         }
-        return result;
+
+        @SuppressWarnings("unchecked")
+        final List<Link> links = (List<Link>) HibernateUtil.getSession()
+                .createQuery("FROM " + Link.class.getName() + " WHERE inode IN (:inodes)")
+                .setParameterList("inodes", inodes)
+                .list();
+
+        return links != null ? links : java.util.Collections.emptyList();
     }
 
     /**
