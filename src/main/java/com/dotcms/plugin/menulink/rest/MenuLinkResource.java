@@ -8,7 +8,7 @@ import com.dotcms.rest.api.v1.authentication.ResponseUtil;
 import com.dotmarketing.beans.Host;
 import com.dotmarketing.business.APILocator;
 import com.dotmarketing.business.PermissionAPI;
-import com.dotmarketing.db.DotConnect;
+import com.dotmarketing.common.db.DotConnect;
 import com.dotmarketing.db.HibernateUtil;
 import com.dotmarketing.portlets.folders.model.Folder;
 import com.dotmarketing.portlets.links.model.Link;
@@ -135,6 +135,10 @@ public class MenuLinkResource {
                 resolvedHostId = site.getIdentifier();
             }
 
+            // Populated by findLinksUnderPath; used in view mapping to skip per-link API calls.
+            final java.util.Map<String, java.util.Map<String, String>> versionData =
+                    new java.util.HashMap<>();
+
             final List<Link> links;
             if (UtilMethods.isSet(folderPath)) {
                 if (!UtilMethods.isSet(resolvedHostId)) {
@@ -152,10 +156,18 @@ public class MenuLinkResource {
                 // one Hibernate batch load) instead of one findFolderMenuLinks() +
                 // one findSubFolders() call per folder. Re-apply permission filtering
                 // since the SQL runs without user context.
-                final List<Link> folderLinks = findLinksUnderPath(folderPath, site, Math.max(0, depth));
+                long _t = System.currentTimeMillis();
+                final List<Link> folderLinks = findLinksUnderPath(folderPath, site, Math.max(0, depth), versionData);
+                Logger.info(this, String.format("[menulinks] findLinksUnderPath: %dms (%d links)",
+                        System.currentTimeMillis() - _t, folderLinks.size()));
+
+                _t = System.currentTimeMillis();
                 List<Link> permitted = APILocator.getPermissionAPI()
                         .filterCollection(folderLinks, PermissionAPI.PERMISSION_READ, false, user);
+                Logger.info(this, String.format("[menulinks] permission filter: %dms (%d permitted)",
+                        System.currentTimeMillis() - _t, permitted.size()));
 
+                _t = System.currentTimeMillis();
                 if (!includeArchived) {
                     permitted = permitted.stream()
                             .filter(l -> {
@@ -168,8 +180,12 @@ public class MenuLinkResource {
                             })
                             .collect(Collectors.toList());
                 }
+                Logger.info(this, String.format("[menulinks] archived filter: %dms (%d remaining)",
+                        System.currentTimeMillis() - _t, permitted.size()));
 
+                _t = System.currentTimeMillis();
                 permitted = sortLinks(permitted, orderBy);
+                Logger.info(this, String.format("[menulinks] sort: %dms", System.currentTimeMillis() - _t));
 
                 final int fromIndex = Math.min(offset, permitted.size());
                 final int toIndex = limit > 0
@@ -193,7 +209,13 @@ public class MenuLinkResource {
             final List<MenuLinkView> views = links.stream()
                     .map(link -> {
                         try {
-                            return MenuLinkView.from(link);
+                            final java.util.Map<String, String> vd = versionData.get(link.getInode());
+                            return vd != null
+                                    ? MenuLinkView.fromPrefetched(link,
+                                            vd.get("live_inode"),
+                                            vd.get("parent_path"),
+                                            vd.get("host_inode"))
+                                    : MenuLinkView.from(link);
                         } catch (Exception e) {
                             Logger.warn(this, "Could not build view for link inode=" + link.getInode(), e);
                             return null;
@@ -577,12 +599,15 @@ public class MenuLinkResource {
      * <p>Callers are expected to apply permission filtering on the returned list.
      */
     private List<Link> findLinksUnderPath(final String rootPath, final Host site,
-                                           final int maxDepth) throws Exception {
+                                           final int maxDepth,
+                                           final java.util.Map<String, java.util.Map<String, String>> versionData)
+            throws Exception {
         final String normalizedPath = rootPath.endsWith("/") ? rootPath : rootPath + "/";
         final long baseSlashes = normalizedPath.chars().filter(c -> c == '/').count();
 
+        long _t = System.currentTimeMillis();
         final DotConnect dc = new DotConnect();
-        dc.setSQL("SELECT vinfo.working_inode, id.parent_path "
+        dc.setSQL("SELECT vinfo.working_inode, vinfo.live_inode, id.parent_path, id.host_inode "
                 + "FROM link_version_info vinfo "
                 + "JOIN identifier id ON id.id = vinfo.identifier "
                 + "WHERE id.host_inode = ? "
@@ -590,29 +615,33 @@ public class MenuLinkResource {
         dc.addParam(site.getIdentifier());
         dc.addParam(normalizedPath + "%");
 
-        final List<String> inodes = dc.loadResults().stream()
-                .filter(row -> {
-                    final Object p = row.get("parent_path");
-                    if (p == null) return false;
-                    return p.toString().chars().filter(c -> c == '/').count()
-                            <= baseSlashes + maxDepth;
-                })
-                .map(row -> {
-                    final Object v = row.get("working_inode");
-                    return v != null ? v.toString() : null;
-                })
-                .filter(inode -> inode != null)
-                .collect(Collectors.toList());
+        @SuppressWarnings("unchecked")
+        final java.util.ArrayList<java.util.Map<String, String>> rows = dc.loadResults();
+        final List<String> inodes = new java.util.ArrayList<>();
+        for (final java.util.Map<String, String> row : rows) {
+            final String p = row.get("parent_path");
+            if (p == null) continue;
+            if (p.chars().filter(c -> c == '/').count() > baseSlashes + maxDepth) continue;
+            final String workingInode = row.get("working_inode");
+            if (workingInode == null) continue;
+            inodes.add(workingInode);
+            versionData.put(workingInode, row);
+        }
+        Logger.info(this, String.format("[menulinks] DotConnect inode query: %dms (%d rows in, %d after depth filter)",
+                System.currentTimeMillis() - _t, rows.size(), inodes.size()));
 
         if (inodes.isEmpty()) {
             return java.util.Collections.emptyList();
         }
 
+        _t = System.currentTimeMillis();
         @SuppressWarnings("unchecked")
         final List<Link> links = (List<Link>) HibernateUtil.getSession()
-                .createQuery("FROM " + Link.class.getName() + " WHERE inode IN (:inodes)")
+                .createQuery("FROM " + Link.class.getName() + " lnk WHERE lnk.inode IN (:inodes)")
                 .setParameterList("inodes", inodes)
                 .list();
+        Logger.info(this, String.format("[menulinks] Hibernate batch load: %dms (%d links)",
+                System.currentTimeMillis() - _t, links != null ? links.size() : 0));
 
         return links != null ? links : java.util.Collections.emptyList();
     }

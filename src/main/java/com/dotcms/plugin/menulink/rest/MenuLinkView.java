@@ -70,6 +70,38 @@ public class MenuLinkView {
     }
 
     /**
+     * Builds a {@link MenuLinkView} using data already fetched from {@code link_version_info}
+     * and {@code identifier}, avoiding per-link API calls.
+     *
+     * @param liveInode  the {@code live_inode} column value (empty string if not live)
+     * @param parentPath the {@code parent_path} column value from {@code identifier}
+     * @param siteId     the {@code host_inode} column value from {@code identifier}
+     */
+    public static MenuLinkView fromPrefetched(final Link link, final String liveInode,
+                                               final String parentPath, final String siteId) {
+        final boolean isLive = InodeUtils.isSet(liveInode) && liveInode.equals(link.getInode());
+        final String resolvedSiteId = UtilMethods.isSet(siteId) ? siteId
+                : (UtilMethods.isSet(link.getHostId()) ? link.getHostId() : "");
+        return new MenuLinkView(
+                link.getInode(),
+                link.getIdentifier(),
+                link.getTitle(),
+                link.getFriendlyName(),
+                link.getUrl(),
+                link.getProtocal(),
+                link.getTarget(),
+                link.getLinkType(),
+                link.getLinkCode(),
+                link.getInternalLinkIdentifier(),
+                link.isShowOnMenu(),
+                link.getSortOrder(),
+                isLive,
+                true,   // always the working version — we load via working_inode
+                resolvedSiteId,
+                UtilMethods.isSet(parentPath) ? parentPath : "");
+    }
+
+    /**
      * Builds a {@link MenuLinkView} from a {@link Link}, fetching live/working state
      * and folder path from the system APIs.
      */
