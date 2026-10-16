@@ -1,0 +1,2 @@
+# JDK used to build the plugin; matches the dotCMS core runtime
+java=25.0.2-ms
