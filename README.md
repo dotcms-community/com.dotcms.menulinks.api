@@ -131,6 +131,8 @@ All endpoints wrap their payload in dotCMS's standard `ResponseEntityView`:
 
 The plugin is fully standalone — no dotCMS source checkout required. `dotcms-core` is downloaded automatically from the dotCMS Artifactory repository.
 
+Requires **JDK 25** (the dotCMS runtime version). With SDKMAN, run `sdk env` to pick up the version pinned in `.sdkmanrc`.
+
 ```bash
 ./mvnw package
 ```
@@ -140,8 +142,10 @@ The output JAR is at `target/com.dotcms.plugin.menu-link-api-*.jar`.
 To target a different dotCMS version, change the `dotcms-core.version` property in `pom.xml`:
 
 ```xml
-<dotcms-core.version>26.04.06-01</dotcms-core.version>
+<dotcms-core.version>26.10.13-01</dotcms-core.version>
 ```
+
+> **Note:** `pom.xml` excludes `com.dotcms.core.plugins:com.dotcms.tika-api` from `dotcms-core`. dotCMS stopped publishing that artifact after 26.09.28-02, so without the exclusion the build fails to resolve it. Excluding it is safe because the plugin uses no Tika types. Remove the exclusion once the artifact is published again.
 
 Release tags follow the pattern `YY.MM.DD-NN` and can be browsed at
 `https://artifactory.dotcms.cloud/artifactory/libs-release/com/dotcms/dotcms-core/`.
